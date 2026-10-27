@@ -510,7 +510,7 @@ void delete(char *buffer, int line, MemContent *content) {
 	content->count--;
 
 	if (content->current > content->count) {
-		content->current = content->count;
+		content->current = content->count - 1;
 	}
 
 	if (content->current < 1) {

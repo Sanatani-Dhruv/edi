@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -103,12 +104,11 @@ int main(int argc, char **argv) {
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC "gn", 3)) {
+				if (sneql(strncmp, buffer, ESC "g", 2)) {
 					char ch;
 					int line;
-					char exitmodech;
 					
-					int ret = sscanf(buffer + 2, "%c%d%c", &ch, &line, &exitmodech);
+					int ret = sscanf(buffer + 1, "%c%d", &ch, &line);
 
 					if (ret > 1) {
 						if (line > content.count) {
@@ -121,15 +121,12 @@ int main(int argc, char **argv) {
 							continue;
 						} else {
 							content.current = line - 1;
-							if (ret == 3 && exitmodech == ';') {
-								maybe_switch_to_write(buffer, len, &mode);
-							}
 							continue;
 						}
 					}
 				}
 
-				if (sneql(strncmp, buffer, ESC "go", 3)) {
+				if (sneql(strncmp, buffer, ESC "o", 2)) {
 					content.current++;
 					if (content.count < content.current) {
 						content.count = content.current;
@@ -137,14 +134,42 @@ int main(int argc, char **argv) {
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC "gO", 3)) {
+				if (sneql(strncmp, buffer, ESC "w", 2)) {
+					if (!seql(strcmp, filename, "")) {
+						writeToFile(filename, &content);
+					} else {
+						puts("No filename provided");
+					}
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "r", 2)) {
+					if (!seql(strcmp, filename, "")) {
+						readFromFile(filename, &content);
+					} else {
+						puts("No filename provided");
+					}
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "p", 2)) {
+					cat(&content, (buffer[2] == 'n'));
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "d", 2)) {
+					delete(buffer, content.current + 1, &content);
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "O", 2)) {
 					if (0 < content.current) {
 						content.current--;
 					}
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC "gl", 3)) {
+				if (sneql(strncmp, buffer, ESC "l", 2)) {
 					printf(ESC "[1;1H" ESC "[2J");
 					continue;
 				}
@@ -175,16 +200,17 @@ int main(int argc, char **argv) {
 			case Mode(COMMAND):
 				if (sneql(strncmp, buffer, "w", 1)) {
 					char ch = 0;
+					char middleman = 0;
 					char provided_filename[MAX_FILENAME];
 
-					int ret = sscanf(buffer, "%c %s", &ch, provided_filename);
+					int ret = sscanf(buffer, "%c%c%s", &ch, &middleman, provided_filename);
 
 					if (ret == 1 && filename_len < 1) {
 						puts("No filename provided");
 						maybe_switch_to_write(buffer, len, &mode);
 						continue;
-					} else if (ret == 2) {
-						if (sneql(strncmp, buffer, "w;", 2)) {
+					} else if (ret == 3) {
+						if (middleman == ';' || middleman != ' ') {
 							maybe_switch_to_write(buffer, len, &mode);
 							continue;
 						}
@@ -242,7 +268,7 @@ int main(int argc, char **argv) {
 				}
 
 				if (seql(strcmp, buffer, "catn") || seql(strcmp, buffer, "pn")|| seql(strcmp, buffer, "pn;") || seql(strcmp, buffer, "catn;")) {
-					cat(&content, true);
+					cat(&content, (buffer[len - 1] == 'n' || buffer[len - 2] == 'n'));
 					maybe_switch_to_write(buffer, len, &mode);
 					continue;
 				}
@@ -327,6 +353,12 @@ int main(int argc, char **argv) {
 					}
 				}
 
+				if (sneql(strncmp, buffer, "ls", 2)) {
+					int ret = system("ls");
+					printf("Program Exited with code: %d\n", ret);
+					continue;
+				}
+
 				if (sneql(strncmp, buffer, "O", 1)) {
 					char ch;
 					int line;
@@ -348,6 +380,7 @@ int main(int argc, char **argv) {
 						}
 					}
 				}
+
 				if (sneql(strncmp, buffer, "g", 1)) {
 					char ch;
 					int line;
@@ -407,6 +440,7 @@ bool readFromFile(const char *filename, MemContent *content) {
 
 	int lines = 0;
 	int count = 0;
+
 	while (fgets(content->lines[lines], sizeof(content->lines[lines]), file) && count <= MAX_LINES) {
 		int len = strlen(content->lines[lines]);
 		content->lines[lines][len - 1] = '\0';
@@ -477,6 +511,10 @@ void delete(char *buffer, int line, MemContent *content) {
 
 	if (content->current > content->count) {
 		content->current = content->count;
+	}
+
+	if (content->current < 1) {
+		content->current = 0;
 	}
 }
 

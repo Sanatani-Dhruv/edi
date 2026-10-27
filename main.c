@@ -135,7 +135,11 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, ESC "w", 2)) {
-					if (!seql(strcmp, filename, "")) {
+					if (!seql(strcmp, filename, "") || *(buffer+2) != '\0') {
+						if (*(buffer+2) != '\0') {
+							strcpy(filename, buffer + 2);
+						}
+
 						writeToFile(filename, &content);
 					} else {
 						puts("No filename provided");
@@ -144,7 +148,11 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, ESC "r", 2)) {
-					if (!seql(strcmp, filename, "")) {
+					if (!seql(strcmp, filename, "") || *(buffer+2) != '\0') {
+						if (*(buffer+2) != '\0') {
+							strcpy(filename, buffer + 2);
+						}
+
 						readFromFile(filename, &content);
 					} else {
 						puts("No filename provided");

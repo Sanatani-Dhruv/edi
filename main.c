@@ -98,17 +98,17 @@ int main(int argc, char **argv) {
 
 		switch (mode) {
 			case Mode(WRITE):
-				if (seql(strcmp, buffer, ESC)) {
+				if (seql(strcmp, buffer, ESC "g")) {
 					printf("Lines: %d\n", content.count);
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC "g", 2)) {
+				if (sneql(strncmp, buffer, ESC "gn", 3)) {
 					char ch;
 					int line;
 					char exitmodech;
 					
-					int ret = sscanf(buffer + 1, "%c%d%c", &ch, &line, &exitmodech);
+					int ret = sscanf(buffer + 2, "%c%d%c", &ch, &line, &exitmodech);
 
 					if (ret > 1) {
 						if (line > content.count) {
@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
 					}
 				}
 
-				if (sneql(strncmp, buffer, ESC "o", 2)) {
+				if (sneql(strncmp, buffer, ESC "go", 3)) {
 					content.current++;
 					if (content.count < content.current) {
 						content.count = content.current;
@@ -137,19 +137,19 @@ int main(int argc, char **argv) {
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC "O", 2)) {
+				if (sneql(strncmp, buffer, ESC "gO", 3)) {
 					if (0 < content.current) {
 						content.current--;
 					}
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC "l", 2)) {
+				if (sneql(strncmp, buffer, ESC "gl", 3)) {
 					printf(ESC "[1;1H" ESC "[2J");
 					continue;
 				}
 
-				if (sneql(strncmp, buffer, ESC ESC, 2)) {
+				if (sneql(strncmp, buffer, ESC ESC, 2) || sneql(strncmp, buffer, ESC "q", 2)) {
 					mode = Mode(COMMAND);
 					puts(GREEN "Switch: W > C" RESET);
 					continue;
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
 					content.count = content.current;
 				}
 
-				printf("W: %d\n", len+1);
+				/* printf("W: %d\n", len+1); */
 				break;
 			case Mode(COMMAND):
 				if (sneql(strncmp, buffer, "w", 1)) {
@@ -491,7 +491,7 @@ void openline(char *buffer, int line, MemContent *content) {
 		strcpy(content->lines[i + 1], content->lines[i]);
 	}
 
-	content->len[line+1] = 0;
+	content->len[line + 1] = 0;
 	content->lines[line+1][0] = '\0';
 
 	content->count++;

@@ -14,4 +14,4 @@ run: ${O}
 	${CFLAG} ./${O}
 
 install: ${O}
-	cp ${O} ${PREFIX}/usr/bin/
+	cp ${O} ${PREFIX}/usr/local/bin/

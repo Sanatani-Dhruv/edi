@@ -38,7 +38,7 @@ typedef enum Mode {
 
 void help();
 
-void cat(MemContent *content);
+void cat(MemContent *content, bool number);
 
 bool readFromFile(const char *filename, MemContent *content);
 
@@ -48,19 +48,26 @@ void maybe_switch_to_write(char *buffer, int len, Mode *mode);
 
 void delete(char *buffer, int line, MemContent *content);
 
-int main() {
+void openline(char *buffer, int line, MemContent *content);
+
+int main(int argc, char **argv) {
 	MemContent content = {0};
+
+	char filename[MAX_FILENAME] = {0};
+	int filename_len = 0;
 
 	for (int i = 0; i < MAX_LINES;i++) {
 		strcpy(content.lines[i], "");
 	}
 
+	if (argc > 1) {
+		strcpy(filename, argv[1]);
+		readFromFile(filename, &content);
+	}
+
 	help();
 
 	Mode mode = Mode(WRITE);
-
-	char filename[MAX_FILENAME] = {0};
-	int filename_len = 0;
 
 	bool end = false;
 
@@ -229,7 +236,13 @@ int main() {
 				}
 
 				if (seql(strcmp, buffer, "cat") || seql(strcmp, buffer, "p")|| seql(strcmp, buffer, "p;") || seql(strcmp, buffer, "cat;")) {
-					cat(&content);
+					cat(&content, false);
+					maybe_switch_to_write(buffer, len, &mode);
+					continue;
+				}
+
+				if (seql(strcmp, buffer, "catn") || seql(strcmp, buffer, "pn")|| seql(strcmp, buffer, "pn;") || seql(strcmp, buffer, "catn;")) {
+					cat(&content, true);
 					maybe_switch_to_write(buffer, len, &mode);
 					continue;
 				}
@@ -283,6 +296,51 @@ int main() {
 							sprintf(buffer, "Invalid Line number %d. Line number must be natural integer", line);
 						} else {
 							delete(buffer, line, &content);
+							if (ret == 3 && exitmodech == ';') {
+								maybe_switch_to_write(buffer, len, &mode);
+							}
+							continue;
+						}
+					}
+				}
+
+				if (sneql(strncmp, buffer, "o", 1)) {
+					char ch;
+					int line;
+					char exitmodech;
+
+					int ret = sscanf(buffer, "%c%d%c", &ch, &line, &exitmodech);
+
+					if (ret > 1) {
+						if (line > content.count) {
+							sprintf(buffer, "Cannot Access Content Offset %d", line);
+						} else if (line <= 0) {
+							sprintf(buffer, "Invalid Line number %d. Line number must be natural integer", line);
+						} else {
+							openline(buffer, line - 1, &content);
+
+							if (ret == 3 && exitmodech == ';') {
+								maybe_switch_to_write(buffer, len, &mode);
+							}
+							continue;
+						}
+					}
+				}
+
+				if (sneql(strncmp, buffer, "O", 1)) {
+					char ch;
+					int line;
+					char exitmodech;
+
+					int ret = sscanf(buffer, "%c%d%c", &ch, &line, &exitmodech);
+
+					if (ret > 1) {
+						if (line > content.count) {
+							sprintf(buffer, "Cannot Access Content Offset %d", line);
+						} else if (line <= 0) {
+							sprintf(buffer, "Invalid Line number %d. Line number must be natural integer", line);
+						} else {
+							openline(buffer, line - 2, &content);
 							if (ret == 3 && exitmodech == ';') {
 								maybe_switch_to_write(buffer, len, &mode);
 							}
@@ -358,6 +416,7 @@ bool readFromFile(const char *filename, MemContent *content) {
 	}
 
 	content->count = lines;
+	content->current = lines;
 	printf("Read %d lines to '%s' [%d bytes]\n", lines, filename, count);
 
 	fclose(file);
@@ -384,9 +443,15 @@ bool writeToFile(const char *filename, MemContent *content) {
 	return 1;
 }
 
-void cat(MemContent *content) {
-	for (int i = 0; i < content->count; i++) {
-		printf("%s\n", content->lines[i]);
+void cat(MemContent *content, bool number) {
+	if (number) {
+		for (int i = 0; i < content->count; i++) {
+			printf("%4d) %s\n", i + 1, content->lines[i]);
+		}
+	} else {
+		for (int i = 0; i < content->count; i++) {
+			printf("%s\n", content->lines[i]);
+		}
 	}
 }
 
@@ -413,4 +478,21 @@ void delete(char *buffer, int line, MemContent *content) {
 	if (content->current > content->count) {
 		content->current = content->count;
 	}
+}
+
+void openline(char *buffer, int line, MemContent *content) {
+	if (line > content->count || line < 0) {
+		sprintf(buffer, "Cannot access line offset %d", line);
+		return;
+	}
+
+	for(int i = content->count; i != line - 1; i--) {
+		content->len[i + 1] = content->len[i];
+		strcpy(content->lines[i + 1], content->lines[i]);
+	}
+
+	content->len[line+1] = 0;
+	content->lines[line+1][0] = '\0';
+
+	content->count++;
 }

@@ -1,4 +1,6 @@
-O=edi
+O=build/edi
+
+BUILD=build
 
 PREFIX=
 
@@ -7,8 +9,11 @@ HEADER=$(shell find -name "*.h")
 
 all: ${O}
 
-${O}: ${SRC} ${HEADER}
+${O}: ${BUILD} ${SRC} ${HEADER}
 	cc ${CFLAG} ${SRC} -o ${O}
+
+${BUILD}:
+	mkdir -p build
 
 run: ${O}
 	${RPFLAG} ./${O} ${RFLAG}

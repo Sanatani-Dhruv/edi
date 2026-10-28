@@ -13,6 +13,10 @@
 
 #define RED "\e[31m"
 #define GREEN "\e[32m"
+#define YELLOW "\e[33m"
+#define BLUE "\e[34m"
+
+#define B "\e[1m"
 
 #define RESET "\e[0m"
 
@@ -36,6 +40,8 @@ typedef enum Mode {
 	Mode(WRITE),
 	Mode(COMMAND),
 } Mode;
+
+void clear();
 
 void help();
 
@@ -100,17 +106,16 @@ int main(int argc, char **argv) {
 		switch (mode) {
 			case Mode(WRITE):
 				if (seql(strcmp, buffer, ESC "g")) {
-					printf("Lines: %d\n", content.count);
+					printf("Lines: %d\n", content.count + 1);
 					continue;
 				}
 
 				if (sneql(strncmp, buffer, ESC "g", 2)) {
-					char ch;
 					int line;
 					
-					int ret = sscanf(buffer + 1, "%c%d", &ch, &line);
+					int ret = sscanf(buffer + 1, "g%d", &line);
 
-					if (ret > 1) {
+					if (ret > 0) {
 						if (line > content.count) {
 							sprintf(buffer, "Cannot access line offset %d", line);
 							fprintf(stderr, "Invalid Command: " RED "'%s'" RESET "\n", buffer);
@@ -282,24 +287,23 @@ int main(int argc, char **argv) {
 				}
 
 				if (seql(strcmp, buffer, "clear") || seql(strcmp, buffer, "clear;")) {
-					printf(ESC "[1;1H" ESC "[2J");
+					clear();
 					maybe_switch_to_write(buffer, len, &mode);
 					continue;
 				}
 
 				if (seql(strcmp, buffer, "q") || seql(strcmp, buffer, "quit") || seql(strcmp, buffer, "exit") ||
 					seql(strcmp, buffer, "q;") || seql(strcmp, buffer, "quit;") || seql(strcmp, buffer, "exit;")
-						) {
+				) {
 					end = true;
 					continue;
 				}
 
 				if (sneql(strncmp, buffer, "l", 1)) {
-					char ch;
 					int line;
 					char exitmodech;
 
-					int ret = sscanf(buffer, "%c%d%c", &ch, &line, &exitmodech);
+					int ret = sscanf(buffer, "l%d%c", &line, &exitmodech);
 
 					if (ret > 1) {
 						if (line > content.count) {
@@ -308,7 +312,7 @@ int main(int argc, char **argv) {
 							sprintf(buffer, "Invalid Line number %d. Line number must be natural integer", line);
 						} else {
 							printf("%d: %s\n", line, content.lines[line - 1]);
-							if (ret == 3 && exitmodech == ';'){
+							if (ret == 2 && exitmodech == ';'){
 								maybe_switch_to_write(buffer, len, &mode);
 							}
 							continue;
@@ -317,11 +321,10 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, "d", 1)) {
-					char ch;
 					int line;
 					char exitmodech;
 
-					int ret = sscanf(buffer, "%c%d%c", &ch, &line, &exitmodech);
+					int ret = sscanf(buffer, "d%d%c", &line, &exitmodech);
 
 					if (ret > 1) {
 						if (line > content.count) {
@@ -330,7 +333,7 @@ int main(int argc, char **argv) {
 							sprintf(buffer, "Invalid Line number %d. Line number must be natural integer", line);
 						} else {
 							delete(buffer, line, &content);
-							if (ret == 3 && exitmodech == ';') {
+							if (ret == 2 && exitmodech == ';') {
 								maybe_switch_to_write(buffer, len, &mode);
 							}
 							continue;
@@ -339,11 +342,10 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, "o", 1)) {
-					char ch;
 					int line;
 					char exitmodech;
 
-					int ret = sscanf(buffer, "%c%d%c", &ch, &line, &exitmodech);
+					int ret = sscanf(buffer, "o%d%c", &line, &exitmodech);
 
 					if (ret > 1) {
 						if (line > content.count) {
@@ -353,17 +355,34 @@ int main(int argc, char **argv) {
 						} else {
 							openline(buffer, line - 1, &content);
 
-							if (ret == 3 && exitmodech == ';') {
+							if (ret == 2 && exitmodech == ';') {
 								maybe_switch_to_write(buffer, len, &mode);
 							}
+
 							continue;
 						}
 					}
 				}
 
-				if (sneql(strncmp, buffer, "ls", 2)) {
-					int ret = system("ls");
-					printf("Program Exited with code: %d\n", ret);
+				if (sneql(strncmp, buffer, "!", 1)) {
+					char command_buffer[len + 10];
+
+					sprintf(command_buffer, "env %s", buffer + 1);
+
+					int ret = ((int)system(command_buffer)) / 256;
+					printf("\n" YELLOW "Program Exited with code: %d" RESET "\n", ret);
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, "c!", 2)) {
+					char command_buffer[len + 10];
+
+					clear();
+					fflush(stdout);
+					sprintf(command_buffer, "env %s", buffer + 2);
+
+					int ret = ((int)system(command_buffer)) / 256;
+					printf("\n" YELLOW "Program Exited with code: %d" RESET "\n", ret);
 					continue;
 				}
 
@@ -488,7 +507,7 @@ bool writeToFile(const char *filename, MemContent *content) {
 void cat(MemContent *content, bool number) {
 	if (number) {
 		for (int i = 0; i < content->count; i++) {
-			printf("%4d) %s\n", i + 1, content->lines[i]);
+			printf(B BLUE "%4d" RESET " | %s\n", i + 1, content->lines[i]);
 		}
 	} else {
 		for (int i = 0; i < content->count; i++) {
@@ -505,25 +524,18 @@ void maybe_switch_to_write(char *buffer, int len, Mode *mode) {
 }
 
 void delete(char *buffer, int line, MemContent *content) {
-	if (line > content->count || line < 0) {
-		sprintf(buffer, "Cannot access line offset %d", line);
+	if (line > content->count || line > 0) {
+		content->current = content->count - 1;
 		return;
 	}
 
-	for(int i = line - 1; i < content->count - 1; i++) {
+	for (int i = line + 1; i < content->count-1; i++) {
+		strcpy(content->lines[i], content->lines[i+1]);
 		content->len[i] = content->len[i + 1];
-		strcpy(content->lines[i], content->lines[i + 1]);
 	}
 
+	content->current--;
 	content->count--;
-
-	if (content->current > content->count) {
-		content->current = content->count - 1;
-	}
-
-	if (content->current < 1) {
-		content->current = 0;
-	}
 }
 
 void openline(char *buffer, int line, MemContent *content) {
@@ -541,4 +553,8 @@ void openline(char *buffer, int line, MemContent *content) {
 	content->lines[line+1][0] = '\0';
 
 	content->count++;
+}
+
+void clear() {
+	printf(ESC "[1;1H" ESC "[2J");
 }

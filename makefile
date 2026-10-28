@@ -11,7 +11,7 @@ ${O}: ${SRC} ${HEADER}
 	cc ${CFLAG} ${SRC} -o ${O}
 
 run: ${O}
-	${CFLAG} ./${O}
+	${RPFLAG} ./${O} ${RFLAG}
 
 install: ${O}
 	cp ${O} ${PREFIX}/usr/local/bin/

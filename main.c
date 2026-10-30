@@ -218,11 +218,36 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, ESC "j", 2)) {
-					if (content.current < content.count - 1) {
+					if (content.current < content.count) {
 						content.current++;
 					} else {
 						puts("End of Line");
 					}
+
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "`", 2)) {
+					char command_buffer[len + 10];
+
+					sprintf(command_buffer, "/usr/bin/env %s", buffer + 2);
+
+					int ret = ((int)system(command_buffer)) / 256;
+					printf("\n" YELLOW "Program Exited with code: %d" RESET "\n", ret);
+
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "~", 2)) {
+					char command_buffer[len + 10];
+
+					clear();
+					fflush(stdout);
+					printf("$ %s\n", buffer + 2);
+					sprintf(command_buffer, "/usr/bin/env %s", buffer + 2);
+
+					int ret = ((int)system(command_buffer)) / 256;
+					printf("\n" YELLOW "Program Exited with code: %d" RESET "\n", ret);
 
 					continue;
 				}
@@ -369,7 +394,7 @@ int main(int argc, char **argv) {
 					continue;
 				}
 
-				if (seql(strcmp, buffer, "clear") || seql(strcmp, buffer, "clear;")) {
+				if (seql(strcmp, buffer, "clear") || seql(strcmp, buffer, "clear;") || seql(strcmp, buffer, "c;") || seql(strcmp, buffer, "c")) {
 					clear();
 					maybe_switch_to_write(buffer, len, &mode);
 					continue;
@@ -388,7 +413,7 @@ int main(int argc, char **argv) {
 
 					int ret = sscanf(buffer, "l%d%c", &line, &exitmodech);
 
-					if (ret > 1) {
+					if (ret > 0) {
 						if (line > content.count) {
 							sprintf(buffer, "Cannot Access Content Offset %d", line);
 						} else if (line <= 0) {

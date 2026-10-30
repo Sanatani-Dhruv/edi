@@ -30,7 +30,7 @@
 #define sneql(func, s1, s2, n)(func(s1, s2, n) == 0)
 
 typedef struct {
-	char lines[MAX_LINES][MAX_LINE_C];
+	char content[MAX_LINES][MAX_LINE_C];
 	int len[MAX_LINES];
 	int current;
 	int count;
@@ -40,6 +40,12 @@ typedef enum Mode {
 	Mode(WRITE),
 	Mode(COMMAND),
 } Mode;
+
+/*
+ * =====================
+ * Function Declarations
+ * =====================
+ * */
 
 void clear();
 
@@ -57,14 +63,23 @@ void delete(char *buffer, int line, MemContent *content);
 
 void openline(char *buffer, int line, MemContent *content);
 
+/*
+ * ===============================
+ * Function Declarations Ends Here
+ * ===============================
+ * */
+
 int main(int argc, char **argv) {
 	MemContent content = {0};
 
 	char filename[MAX_FILENAME] = {0};
 	int filename_len = 0;
 
+	char undobuffer[MAX_LINE_C];
+	int undobuffer_line = 0;
+
 	for (int i = 0; i < MAX_LINES;i++) {
-		strcpy(content.lines[i], "");
+		strcpy(content.content[i], "");
 	}
 
 	if (argc > 1) {
@@ -106,7 +121,7 @@ int main(int argc, char **argv) {
 		switch (mode) {
 			case Mode(WRITE):
 				if (seql(strcmp, buffer, ESC "g")) {
-					printf("Lines: %d\n", content.count + 1);
+					printf("Lines: %d\n", content.count);
 					continue;
 				}
 
@@ -171,7 +186,9 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, ESC "d", 2)) {
-					delete(buffer, content.current + 1, &content);
+					strcpy(undobuffer, content.content[content.current]);
+					undobuffer_line = content.current;
+					delete(buffer, content.current, &content);
 					continue;
 				}
 
@@ -179,6 +196,11 @@ int main(int argc, char **argv) {
 					if (0 < content.current) {
 						content.current--;
 					}
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "u", 2)) {
+					strcpy(content.content[undobuffer_line], undobuffer);
 					continue;
 				}
 
@@ -198,8 +220,11 @@ int main(int argc, char **argv) {
 					continue;
 				}
 
-				snprintf(content.lines[content.current], len + 1, "%s", buffer);
-				content.lines[content.current][len] = '\0';
+				strcpy(undobuffer, content.content[content.current]);
+				undobuffer_line = content.current;
+
+				snprintf(content.content[content.current], len + 1, "%s", buffer);
+				content.content[content.current][len] = '\0';
 
 				content.len[content.current] = len;
 
@@ -311,7 +336,7 @@ int main(int argc, char **argv) {
 						} else if (line <= 0) {
 							sprintf(buffer, "Invalid Line number %d. Line number must be natural integer", line);
 						} else {
-							printf("%d: %s\n", line, content.lines[line - 1]);
+							printf("%d: %s\n", line, content.content[line - 1]);
 							if (ret == 2 && exitmodech == ';'){
 								maybe_switch_to_write(buffer, len, &mode);
 							}
@@ -367,7 +392,7 @@ int main(int argc, char **argv) {
 				if (sneql(strncmp, buffer, "!", 1)) {
 					char command_buffer[len + 10];
 
-					sprintf(command_buffer, "env %s", buffer + 1);
+					sprintf(command_buffer, "/usr/bin/env %s", buffer + 1);
 
 					int ret = ((int)system(command_buffer)) / 256;
 					printf("\n" YELLOW "Program Exited with code: %d" RESET "\n", ret);
@@ -379,7 +404,8 @@ int main(int argc, char **argv) {
 
 					clear();
 					fflush(stdout);
-					sprintf(command_buffer, "env %s", buffer + 2);
+					printf("$ %s\n", buffer + 2);
+					sprintf(command_buffer, "/usr/bin/env %s", buffer + 2);
 
 					int ret = ((int)system(command_buffer)) / 256;
 					printf("\n" YELLOW "Program Exited with code: %d" RESET "\n", ret);
@@ -440,6 +466,12 @@ int main(int argc, char **argv) {
 	}
 }
 
+/*
+ * ====================
+ * Function Definitions
+ * ====================
+ * */
+
 void help() {
 	puts("===============");
 	puts("|" " [USAGE] " GREEN  "edi" RESET " |");
@@ -455,9 +487,22 @@ bool readFromFile(const char *filename, MemContent *content) {
 	}
 
 	fseek(file, 0L, SEEK_END);
+
+	if (file == NULL) {
+		perror(filename);
+	}
+
 	int size = ftell(file);
 
+	if (file == NULL) {
+		perror(filename);
+	}
+
 	rewind(file);
+
+	if (file == NULL) {
+		perror(filename);
+	}
 
 	if (size > (MAX_LINES * MAX_LINE_C)) {
 		fprintf(stderr, RED "Read aborted for '%s' due to size limit %ld" RESET "\n", filename, (long)MAX_LINES * (long)MAX_LINE_C);
@@ -468,15 +513,15 @@ bool readFromFile(const char *filename, MemContent *content) {
 	int lines = 0;
 	int count = 0;
 
-	while (fgets(content->lines[lines], sizeof(content->lines[lines]), file) && count <= MAX_LINES) {
-		int len = strlen(content->lines[lines]);
-		content->lines[lines][len - 1] = '\0';
+	while (fgets(content->content[lines], sizeof(content->content[lines]), file) && count <= MAX_LINES) {
+		int len = strlen(content->content[lines]);
+		content->content[lines][len - 1] = '\0';
 		content->len[lines] = len - 1;
 		count += content->len[lines];
 		lines++;
 	}
 
-	content->count = lines;
+	content->count = lines + 1;
 	content->current = lines;
 	printf("Read %d lines to '%s' [%d bytes]\n", lines, filename, count);
 
@@ -494,7 +539,7 @@ bool writeToFile(const char *filename, MemContent *content) {
 
 	int count = 0;
 	for (int i = 0; i < content->count; i++) {
-		fprintf(file, "%s\n", content->lines[i]);
+		fprintf(file, "%s\n", content->content[i]);
 		count += content->len[i] + 1;
 	}
 
@@ -507,11 +552,11 @@ bool writeToFile(const char *filename, MemContent *content) {
 void cat(MemContent *content, bool number) {
 	if (number) {
 		for (int i = 0; i < content->count; i++) {
-			printf(B BLUE "%4d" RESET " | %s\n", i + 1, content->lines[i]);
+			printf(B BLUE "%4d" RESET " | %s\n", i + 1, content->content[i]);
 		}
 	} else {
 		for (int i = 0; i < content->count; i++) {
-			printf("%s\n", content->lines[i]);
+			printf("%s\n", content->content[i]);
 		}
 	}
 }
@@ -524,18 +569,29 @@ void maybe_switch_to_write(char *buffer, int len, Mode *mode) {
 }
 
 void delete(char *buffer, int line, MemContent *content) {
-	if (line > content->count || line > 0) {
-		content->current = content->count - 1;
-		return;
+	int userline = line + 1;
+
+	printf("deleted\n" RED B "%4d" RESET " | %s\n", userline, content->content[line]);
+
+	if (line >= content->count - 1) {
+		content->current = content->count - 2;
+		/* return; */
 	}
 
-	for (int i = line + 1; i < content->count-1; i++) {
-		strcpy(content->lines[i], content->lines[i+1]);
+	for (int i = line; i < content->count-1; i++) {
+		content->content[i][0] = '\0';
+		strcpy(content->content[i], content->content[i + 1]);
 		content->len[i] = content->len[i + 1];
 	}
 
-	content->current--;
-	content->count--;
+	if (content->count > 0) {
+		content->count--;
+	}
+
+	if (line <= 0) {
+		content->current = 0;
+		content->count = 0;
+	}
 }
 
 void openline(char *buffer, int line, MemContent *content) {
@@ -546,11 +602,11 @@ void openline(char *buffer, int line, MemContent *content) {
 
 	for(int i = content->count; i != line - 1; i--) {
 		content->len[i + 1] = content->len[i];
-		strcpy(content->lines[i + 1], content->lines[i]);
+		strcpy(content->content[i + 1], content->content[i]);
 	}
 
 	content->len[line + 1] = 0;
-	content->lines[line+1][0] = '\0';
+	content->content[line+1][0] = '\0';
 
 	content->count++;
 }

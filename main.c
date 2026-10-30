@@ -17,6 +17,7 @@
 #define BLUE "\e[34m"
 
 #define B "\e[1m"
+#define L "\e[2m"
 
 #define RESET "\e[0m"
 
@@ -77,6 +78,8 @@ int main(int argc, char **argv) {
 
 	char undobuffer[MAX_LINE_C];
 	int undobuffer_line = 0;
+
+	char copybuffer[MAX_LINE_C];
 
 	for (int i = 0; i < MAX_LINES;i++) {
 		strcpy(content.content[i], "");
@@ -181,14 +184,65 @@ int main(int argc, char **argv) {
 				}
 
 				if (sneql(strncmp, buffer, ESC "p", 2)) {
-					cat(&content, (buffer[2] == 'n'));
+					if (buffer[2] == 'u') {
+						printf("Undobuffer for\n");
+						printf(RED B "%4d" RESET " | %s\n", undobuffer_line + 1, undobuffer);
+						continue;
+					}
+
+					cat(&content, buffer[2] == 'n');
+
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "c", 2)) {
+					strcpy(copybuffer, content.content[content.current]);
+
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "v", 2)) {
+					strcpy(content.content[content.current], copybuffer);
+
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "k", 2)) {
+					if (content.current >= 0) {
+						content.current--;
+					} else {
+						puts("Beginning of Line");
+					}
+
+					continue;
+				}
+
+				if (sneql(strncmp, buffer, ESC "j", 2)) {
+					if (content.current < content.count - 1) {
+						content.current++;
+					} else {
+						puts("End of Line");
+					}
+
 					continue;
 				}
 
 				if (sneql(strncmp, buffer, ESC "d", 2)) {
 					strcpy(undobuffer, content.content[content.current]);
 					undobuffer_line = content.current;
+
 					delete(buffer, content.current, &content);
+
+					/* Fix Incorrect Lines After Deleting when cursor is at last or first line */
+					if (content.current > (content.count - 1)) {
+						content.current = content.count - 1;
+					}
+
+					if (content.count < 1) {
+						content.current = 0;
+						content.count = 0;
+					}
+
 					continue;
 				}
 
@@ -201,6 +255,10 @@ int main(int argc, char **argv) {
 
 				if (sneql(strncmp, buffer, ESC "u", 2)) {
 					strcpy(content.content[undobuffer_line], undobuffer);
+					content.current = undobuffer_line;
+					if (undobuffer_line > content.count) {
+						content.count = undobuffer_line + 1;
+					}
 					continue;
 				}
 
@@ -513,15 +571,24 @@ bool readFromFile(const char *filename, MemContent *content) {
 	int lines = 0;
 	int count = 0;
 
-	while (fgets(content->content[lines], sizeof(content->content[lines]), file) && count <= MAX_LINES) {
-		int len = strlen(content->content[lines]);
-		content->content[lines][len - 1] = '\0';
-		content->len[lines] = len - 1;
-		count += content->len[lines];
-		lines++;
+	char ch = fgetc(file);
+	int len = 0;
+	for (size_t i = 0; (i <= size) && !feof(file); i++) {
+		count++;
+
+		if (ch == '\n') {
+			content->len[lines] = len;
+			lines++;
+			len = 0;
+		} else {
+			content->content[lines][len++] = ch;
+		}
+
+		ch = fgetc(file);
 	}
 
 	content->count = lines + 1;
+	content->content[content->count][0] = '\0';
 	content->current = lines;
 	printf("Read %d lines to '%s' [%d bytes]\n", lines, filename, count);
 
@@ -552,7 +619,11 @@ bool writeToFile(const char *filename, MemContent *content) {
 void cat(MemContent *content, bool number) {
 	if (number) {
 		for (int i = 0; i < content->count; i++) {
-			printf(B BLUE "%4d" RESET " | %s\n", i + 1, content->content[i]);
+			if (i != content->current) {
+				printf(BLUE "%4d" RESET " |" L " %s" RESET "\n", i + 1, content->content[i]);
+			} else {
+				printf(B BLUE "%4d" RESET " |" " %s" RESET "\n", i + 1, content->content[i]);
+			}
 		}
 	} else {
 		for (int i = 0; i < content->count; i++) {
@@ -571,15 +642,18 @@ void maybe_switch_to_write(char *buffer, int len, Mode *mode) {
 void delete(char *buffer, int line, MemContent *content) {
 	int userline = line + 1;
 
-	printf("deleted\n" RED B "%4d" RESET " | %s\n", userline, content->content[line]);
+	if (line > 0) {
+		printf("deleted\n" RED B "%4d" RESET " | %s\n", userline, content->content[line]);
+		/* printf("Line: %d, Count: %d, Current: %d\n", line, content->count, content->current); */
+	}
 
 	if (line >= content->count - 1) {
-		content->current = content->count - 2;
+		content->count--;
+		return;
 		/* return; */
 	}
 
 	for (int i = line; i < content->count-1; i++) {
-		content->content[i][0] = '\0';
 		strcpy(content->content[i], content->content[i + 1]);
 		content->len[i] = content->len[i + 1];
 	}
@@ -589,7 +663,6 @@ void delete(char *buffer, int line, MemContent *content) {
 	}
 
 	if (line <= 0) {
-		content->current = 0;
 		content->count = 0;
 	}
 }
